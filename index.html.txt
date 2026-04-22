@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Submission Form</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        margin: 24px;
+      }
+
+      form {
+        max-width: 560px;
+        display: grid;
+        gap: 12px;
+      }
+
+      label {
+        font-weight: 600;
+      }
+
+      input,
+      textarea,
+      button {
+        font: inherit;
+        padding: 8px;
+      }
+
+      #status {
+        min-height: 1.25rem;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Submit a Request</h1>
+
+    <form id="submission-form">
+      <div>
+        <label for="name">Name</label>
+        <input id="name" name="name" required />
+      </div>
+
+      <div>
+        <label for="email">Email</label>
+        <input id="email" name="email" type="email" required />
+      </div>
+
+      <div>
+        <label for="message">Message</label>
+        <textarea id="message" name="message" rows="4"></textarea>
+      </div>
+
+      <div>
+        <label for="attachment">Attachment (optional)</label>
+        <input
+          id="attachment"
+          name="attachment"
+          type="file"
+          accept=".pdf,.doc,.docx,.txt,.png,.jpg,.jpeg"
+        />
+      </div>
+
+      <button type="submit">Submit</button>
+      <p id="status"></p>
+    </form>
+
+    <script>
+      const form = document.getElementById('submission-form');
+      const statusEl = document.getElementById('status');
+
+      function setStatus(message, isError = false) {
+        statusEl.textContent = message;
+        statusEl.style.color = isError ? '#b00020' : '#1b5e20';
+      }
+
+      function fileToPayload(file) {
+        return new Promise((resolve, reject) => {
+          if (!file) {
+            resolve(null);
+            return;
+          }
+
+          const reader = new FileReader();
+          reader.onload = event => {
+            const result = String(event.target.result || '');
+            const base64Data = result.split(',')[1] || '';
+            resolve({
+              name: file.name,
+              mimeType: file.type || 'application/octet-stream',
+              data: base64Data,
+            });
+          };
+          reader.onerror = () => reject(new Error('Unable to read file.'));
+          reader.readAsDataURL(file);
+        });
+      }
+
+      form.addEventListener('submit', async event => {
+        event.preventDefault();
+        setStatus('Submitting...');
+
+        const formData = new FormData(form);
+        const file = formData.get('attachment');
+
+        try {
+          const payload = {
+            name: formData.get('name'),
+            email: formData.get('email'),
+            message: formData.get('message'),
+            attachment: await fileToPayload(file && file.size ? file : null),
+          };
+
+          google.script.run
+            .withSuccessHandler(response => {
+              form.reset();
+              setStatus(response.message || 'Submission sent successfully.');
+            })
+            .withFailureHandler(error => {
+              setStatus(error.message || 'Submission failed.', true);
+            })
+            .submitForm(payload);
+        } catch (error) {
+          setStatus(error.message || 'Failed to prepare file for upload.', true);
+        }
+      });
+    </script>
+  </body>
+</html>
