@@ -8,6 +8,18 @@
       body {
         font-family: Arial, sans-serif;
         margin: 24px;
+        background-image: url('https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba?auto=format&fit=crop&w=1600&q=80');
+        background-size: cover;
+        background-position: center;
+        background-attachment: fixed;
+      }
+
+      body::before {
+        content: '';
+        position: fixed;
+        inset: 0;
+        background: rgba(255, 255, 255, 0.75);
+        z-index: -1;
       }
 
       form {
