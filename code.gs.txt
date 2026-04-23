@@ -13,35 +13,112 @@ function doGet() {
  * @return {{ok: boolean, message: string, attachmentId: string|null}}
  */
 function submitForm(payload) {
-  if (!payload || !payload.name || !payload.email) {
-    throw new Error('Name and email are required.');
+  try {
+    validatePayload_(payload);
+
+    var normalizedPayload = {
+      name: String(payload.name || '').trim(),
+      email: String(payload.email || '').trim(),
+      message: String(payload.message || '').trim(),
+      attachment: payload.attachment || null,
+    };
+
+    var attachmentId = createAttachmentIfPresent_(normalizedPayload.attachment);
+    appendSubmissionToSheet_(normalizedPayload, attachmentId);
+
+    return {
+      ok: true,
+      message: attachmentId
+        ? 'Submission received, stored, and file uploaded.'
+        : 'Submission received and stored.',
+      attachmentId: attachmentId,
+    };
+  } catch (error) {
+    Logger.log({
+      level: 'error',
+      functionName: 'submitForm',
+      message: error.message,
+      stack: error.stack || '',
+    });
+    throw new Error(error.message || 'Submission failed.');
+  }
+}
+
+/**
+ * @param {{name: string, email: string, message: string, attachment: {name: string, mimeType: string, data: string}|null}|null} payload
+ */
+function validatePayload_(payload) {
+  if (!payload) {
+    throw new Error('Submission payload is required.');
+  }
+  if (!payload.name || !String(payload.name).trim()) {
+    throw new Error('Name is required.');
+  }
+  if (!payload.email || !String(payload.email).trim()) {
+    throw new Error('Email is required.');
+  }
+}
+
+/**
+ * @param {{name: string, mimeType: string, data: string}|null} attachment
+ * @return {string|null}
+ */
+function createAttachmentIfPresent_(attachment) {
+  if (!attachment || !attachment.data) {
+    return null;
   }
 
-  var attachmentId = null;
+  var bytes = Utilities.base64Decode(attachment.data);
+  var blob = Utilities.newBlob(
+    bytes,
+    attachment.mimeType || 'application/octet-stream',
+    attachment.name || 'attachment'
+  );
+  var file = DriveApp.createFile(blob);
+  return file.getId();
+}
 
-  if (payload.attachment && payload.attachment.data) {
-    var bytes = Utilities.base64Decode(payload.attachment.data);
-    var blob = Utilities.newBlob(
-      bytes,
-      payload.attachment.mimeType || 'application/octet-stream',
-      payload.attachment.name || 'attachment'
-    );
-    var file = DriveApp.createFile(blob);
-    attachmentId = file.getId();
+/**
+ * @param {{name: string, email: string, message: string}} payload
+ * @param {string|null} attachmentId
+ */
+function appendSubmissionToSheet_(payload, attachmentId) {
+  var spreadsheet = getSpreadsheet_();
+  var targetSheetName =
+    PropertiesService.getScriptProperties().getProperty('SHEET_NAME') ||
+    'Submissions';
+  var sheet = spreadsheet.getSheetByName(targetSheetName) || spreadsheet.insertSheet(targetSheetName);
+  var headers = ['Timestamp', 'Name', 'Email', 'Message', 'AttachmentId'];
+  ensureHeaders_(sheet, headers);
+
+  var row = [
+    new Date(),
+    payload.name,
+    payload.email,
+    payload.message,
+    attachmentId || '',
+  ];
+  sheet.appendRow(row);
+}
+
+/**
+ * @return {Spreadsheet}
+ */
+function getSpreadsheet_() {
+  var configuredId = PropertiesService.getScriptProperties().getProperty('SPREADSHEET_ID');
+  if (configuredId) {
+    return SpreadsheetApp.openById(configuredId);
   }
+  return SpreadsheetApp.getActiveSpreadsheet();
+}
 
-  Logger.log({
-    name: payload.name,
-    email: payload.email,
-    message: payload.message || '',
-    attachmentId: attachmentId,
-  });
-
-  return {
-    ok: true,
-    message: attachmentId
-      ? 'Submission received and file uploaded.'
-      : 'Submission received.',
-    attachmentId: attachmentId,
-  };
+/**
+ * @param {GoogleAppsScript.Spreadsheet.Sheet} sheet
+ * @param {string[]} headers
+ */
+function ensureHeaders_(sheet, headers) {
+  if (sheet.getLastRow() !== 0) {
+    return;
+  }
+  sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
 }
