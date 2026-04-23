@@ -73,17 +73,24 @@
         />
       </div>
 
-      <button type="submit">Submit</button>
+      <button id="submit-button" type="submit">Submit</button>
       <p id="status"></p>
     </form>
 
     <script>
       const form = document.getElementById('submission-form');
       const statusEl = document.getElementById('status');
+      const submitButton = document.getElementById('submit-button');
+      let isSubmitting = false;
 
       function setStatus(message, isError = false) {
         statusEl.textContent = message;
         statusEl.style.color = isError ? '#b00020' : '#1b5e20';
+      }
+
+      function setSubmittingState(submitting) {
+        isSubmitting = submitting;
+        submitButton.disabled = submitting;
       }
 
       function fileToPayload(file) {
@@ -108,18 +115,46 @@
         });
       }
 
+      function validateFormData(formData) {
+        const name = String(formData.get('name') || '').trim();
+        const email = String(formData.get('email') || '').trim();
+        const message = String(formData.get('message') || '').trim();
+
+        if (!name) {
+          throw new Error('Name is required.');
+        }
+
+        if (!email) {
+          throw new Error('Email is required.');
+        }
+
+        const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailPattern.test(email)) {
+          throw new Error('Please enter a valid email address.');
+        }
+
+        return { name, email, message };
+      }
+
       form.addEventListener('submit', async event => {
         event.preventDefault();
+
+        if (isSubmitting) {
+          return;
+        }
+
+        setSubmittingState(true);
         setStatus('Submitting...');
 
         const formData = new FormData(form);
         const file = formData.get('attachment');
 
         try {
+          const validatedData = validateFormData(formData);
           const payload = {
-            name: formData.get('name'),
-            email: formData.get('email'),
-            message: formData.get('message'),
+            name: validatedData.name,
+            email: validatedData.email,
+            message: validatedData.message,
             attachment: await fileToPayload(file && file.size ? file : null),
           };
 
@@ -127,13 +162,16 @@
             .withSuccessHandler(response => {
               form.reset();
               setStatus(response.message || 'Submission sent successfully.');
+              setSubmittingState(false);
             })
             .withFailureHandler(error => {
               setStatus(error.message || 'Submission failed.', true);
+              setSubmittingState(false);
             })
             .submitForm(payload);
         } catch (error) {
-          setStatus(error.message || 'Failed to prepare file for upload.', true);
+          setStatus(error.message || 'Failed to prepare submission.', true);
+          setSubmittingState(false);
         }
       });
     </script>
