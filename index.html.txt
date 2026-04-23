@@ -7,8 +7,11 @@
     <style>
       body {
         font-family: Arial, sans-serif;
-        margin: 24px;
-        background-image: url('https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba?auto=format&fit=crop&w=1600&q=80');
+        margin: 0;
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        background-image: url('https://i.imgur.com/8kL1f5x.jpeg');
         background-size: cover;
         background-position: center;
         background-attachment: fixed;
@@ -20,6 +23,18 @@
         inset: 0;
         background: rgba(255, 255, 255, 0.75);
         z-index: -1;
+      }
+
+      .card {
+        width: min(92vw, 620px);
+        background: rgba(255, 255, 255, 0.92);
+        border-radius: 16px;
+        padding: 24px;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.12);
+      }
+
+      h1 {
+        margin-top: 0;
       }
 
       form {
@@ -42,44 +57,52 @@
       #status {
         min-height: 1.25rem;
       }
+
+      button[disabled] {
+        opacity: 0.7;
+        cursor: not-allowed;
+      }
     </style>
   </head>
   <body>
-    <h1>Submit a Request</h1>
+    <main class="card">
+      <h1>Submit a Request</h1>
 
-    <form id="submission-form">
-      <div>
-        <label for="name">Name</label>
-        <input id="name" name="name" required />
-      </div>
+      <form id="submission-form">
+        <div>
+          <label for="name">Name</label>
+          <input id="name" name="name" required />
+        </div>
 
-      <div>
-        <label for="email">Email</label>
-        <input id="email" name="email" type="email" required />
-      </div>
+        <div>
+          <label for="email">Email</label>
+          <input id="email" name="email" type="email" required />
+        </div>
 
-      <div>
-        <label for="message">Message</label>
-        <textarea id="message" name="message" rows="4"></textarea>
-      </div>
+        <div>
+          <label for="message">Message</label>
+          <textarea id="message" name="message" rows="4"></textarea>
+        </div>
 
-      <div>
-        <label for="attachment">Attachment (optional)</label>
-        <input
-          id="attachment"
-          name="attachment"
-          type="file"
-          accept=".pdf,.doc,.docx,.txt,.png,.jpg,.jpeg"
-        />
-      </div>
+        <div>
+          <label for="attachment">Attachment (optional)</label>
+          <input
+            id="attachment"
+            name="attachment"
+            type="file"
+            accept=".pdf,.doc,.docx,.txt,.png,.jpg,.jpeg"
+          />
+        </div>
 
-      <button type="submit">Submit</button>
-      <p id="status"></p>
-    </form>
+        <button id="submit-button" type="submit">Submit</button>
+        <p id="status"></p>
+      </form>
+    </main>
 
     <script>
       const form = document.getElementById('submission-form');
       const statusEl = document.getElementById('status');
+      const submitButton = document.getElementById('submit-button');
 
       function setStatus(message, isError = false) {
         statusEl.textContent = message;
@@ -110,16 +133,24 @@
 
       form.addEventListener('submit', async event => {
         event.preventDefault();
+        submitButton.disabled = true;
         setStatus('Submitting...');
 
         const formData = new FormData(form);
         const file = formData.get('attachment');
 
         try {
+          const name = String(formData.get('name') || '').trim();
+          const email = String(formData.get('email') || '').trim();
+          const message = String(formData.get('message') || '').trim();
+          if (!name || !email) {
+            throw new Error('Name and email are required.');
+          }
+
           const payload = {
-            name: formData.get('name'),
-            email: formData.get('email'),
-            message: formData.get('message'),
+            name,
+            email,
+            message,
             attachment: await fileToPayload(file && file.size ? file : null),
           };
 
@@ -127,13 +158,16 @@
             .withSuccessHandler(response => {
               form.reset();
               setStatus(response.message || 'Submission sent successfully.');
+              submitButton.disabled = false;
             })
             .withFailureHandler(error => {
               setStatus(error.message || 'Submission failed.', true);
+              submitButton.disabled = false;
             })
             .submitForm(payload);
         } catch (error) {
           setStatus(error.message || 'Failed to prepare file for upload.', true);
+          submitButton.disabled = false;
         }
       });
     </script>
